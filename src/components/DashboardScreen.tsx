@@ -8,15 +8,12 @@ import {
   TrendingUp, Calendar, Flame, Trophy, BarChart3, PieChart as PieIcon, Activity, Download, Flag, CheckCircle2
 } from 'lucide-react';
 import { 
-  getDailyStats, 
   getWeeklyStats, 
   getMonthlyStats, 
   getBodyPartStats, 
   getPRRecords, 
   getWorkoutStreak,
-  getExerciseStats,
   getWeeklyVolumeTrend,
-  getMonthlyFrequencyTrend,
   getActivityFlow
 } from '../utils/stats';
 import { generateInsights, Insight } from '../utils/insights';

@@ -1,6 +1,5 @@
 import { 
   startOfDay, 
-  startOfWeek, 
   startOfMonth, 
   isSameDay, 
   isSameWeek, 
@@ -10,6 +9,7 @@ import {
   subDays,
   format
 } from 'date-fns';
+import { ko } from 'date-fns/locale';
 import { Workout } from '../types/workout';
 
 // Helper to calculate volume for a single workout

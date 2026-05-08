@@ -1,5 +1,6 @@
+import React, { useState, useMemo } from 'react';
 import { Workout, BodyPart, BODY_PARTS, UserPreferences } from '../types/workout';
-import { Plus, Trash2, Edit3, Save, X, Dumbbell, Sparkles, AlertCircle } from 'lucide-react';
+import { Trash2, Edit3, Dumbbell, Sparkles, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { predictBodyPart } from '../utils/classification';
@@ -65,6 +66,26 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
       onUpdatePrefs(exercise.trim().toLowerCase().replace(/\s+/g, ''), bodyPart);
     }
     
+    setExercise('');
+    setWeight(0);
+    setReps(0);
+    setSets(1);
+    setMemo('');
+  };
+
+  const handleEdit = (w: Workout) => {
+    setEditingId(w.id);
+    setExercise(w.exercise);
+    setBodyPart(w.bodyPart);
+    setWeight(w.weight);
+    setReps(w.reps);
+    setSets(w.sets);
+    setMemo(w.memo);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
     setExercise('');
     setWeight(0);
     setReps(0);

@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { Workout } from '../types/workout';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, 
-  PieChart, Pie, LineChart, Line, AreaChart, Area 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, 
+  PieChart, Pie, AreaChart, Area 
 } from 'recharts';
 import { 
-  TrendingUp, Target, Award, Calendar, Flame, Zap, Trophy, BarChart3, PieChart as PieIcon, Activity, Download, Flag, CheckCircle2
+  TrendingUp, Calendar, Flame, Trophy, BarChart3, PieChart as PieIcon, Activity, Download, Flag, CheckCircle2
 } from 'lucide-react';
 import { 
   getDailyStats, 
@@ -61,15 +61,12 @@ const InsightCard: React.FC<{ insight: Insight }> = ({ insight }) => {
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) => {
   // Memoized data calculations
-  const daily = useMemo(() => getDailyStats(workouts), [workouts]);
   const weekly = useMemo(() => getWeeklyStats(workouts), [workouts]);
   const monthly = useMemo(() => getMonthlyStats(workouts), [workouts]);
   const bodyPartStats = useMemo(() => getBodyPartStats(workouts), [workouts]);
   const prs = useMemo(() => getPRRecords(workouts).slice(0, 3), [workouts]);
   const { streak, daysSinceLast } = useMemo(() => getWorkoutStreak(workouts), [workouts]);
-  const exerciseStats = useMemo(() => getExerciseStats(workouts), [workouts]);
   const weeklyTrend = useMemo(() => getWeeklyVolumeTrend(workouts), [workouts]);
-  const monthlyFreq = useMemo(() => getMonthlyFrequencyTrend(workouts), [workouts]);
   const activityFlow = useMemo(() => getActivityFlow(workouts), [workouts]);
   
   const insights = useMemo(() => generateInsights(workouts), [workouts]);

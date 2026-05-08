@@ -6,7 +6,7 @@ import {
   differenceInDays
 } from 'date-fns';
 import { Workout, BodyPart } from '../types/workout';
-import { calculateVolume, getWeeklyStats, getPRRecords } from './stats';
+import { calculateVolume, getPRRecords } from './stats';
 
 export interface Insight {
   id: string;

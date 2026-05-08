@@ -15,10 +15,31 @@ interface RecordingScreenProps {
   onUpdatePrefs: (name: string, part: BodyPart) => void;
 }
 
+const CATEGORY_MAP: Record<string, string[]> = {
+  '가슴': ['벤치프레스', '인클라인벤치프레스', '펙덱플라이', '덤벨프레스'],
+  '등': ['랫풀다운', '바벨로우', '덤벨로우', '시티드로우'],
+  '어깨/팔': ['사레레', '숄더프레스', '바벨컬', '덤벨컬', '덤벨킥백'],
+  '하체/힙': ['스쿼트', '레그컬', '레그익스텐션', '레그프레스', '힙쓰러스트'],
+  '복근': ['크런치', '레그레이즈', '러시안트위스트'],
+  '전신': ['데드리프트'],
+  '유산소': ['러닝', '자전거']
+};
+
+const CATEGORY_TO_BODYPART: Record<string, BodyPart> = {
+  '가슴': '가슴',
+  '등': '등',
+  '어깨/팔': '어깨', // Default to shoulder, predict will refine
+  '하체/힙': '하체',
+  '복근': '복근',
+  '전신': '전신',
+  '유산소': '유산소'
+};
+
 const RecordingScreen: React.FC<RecordingScreenProps> = ({ 
   workouts, onAdd, onUpdate, onDelete, userPrefs, onUpdatePrefs 
 }) => {
   const [exercise, setExercise] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('가슴');
   const [bodyPart, setBodyPart] = useState<BodyPart>('가슴');
   const [weight, setWeight] = useState<number>(0);
   const [reps, setReps] = useState<number>(0);
@@ -26,11 +47,34 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
   const [memo, setMemo] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [isCustom, setIsCustom] = useState(false);
 
-  // Auto-classify when exercise name changes
-  const handleExerciseChange = (name: string) => {
-    setExercise(name);
-    const predicted = predictBodyPart(name, userPrefs);
+  // Filter exercises: default + user custom exercises for this category
+  const availableExercises = useMemo(() => {
+    const defaults = CATEGORY_MAP[selectedCategory] || [];
+    const customs = Object.entries(userPrefs)
+      .filter(([_, part]) => {
+        const catPart = CATEGORY_TO_BODYPART[selectedCategory];
+        return part === catPart || (selectedCategory === '어깨/팔' && (part === '어깨' || part === '팔'));
+      })
+      .map(([name]) => name);
+    
+    // De-duplicate and return
+    return Array.from(new Set([...defaults, ...customs]));
+  }, [selectedCategory, userPrefs]);
+
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    setBodyPart(CATEGORY_TO_BODYPART[cat]);
+    setExercise('');
+    setIsCustom(false);
+  };
+
+  const handleExerciseSelect = (ex: string) => {
+    setExercise(ex);
+    setIsCustom(false);
+    // Predict body part precisely (e.g. Arms vs Shoulders)
+    const predicted = predictBodyPart(ex, userPrefs);
     setBodyPart(predicted);
   };
 
@@ -44,7 +88,7 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!exercise) return setError('운동 명을 입력해주세요.');
+    if (!exercise) return setError('운동을 선택하거나 입력해주세요.');
     if (weight < 0 || reps < 0 || sets < 1) return setError('올바른 수치를 입력해주세요.');
     
     setError('');
@@ -67,6 +111,7 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     }
     
     setExercise('');
+    setIsCustom(false);
     setWeight(0);
     setReps(0);
     setSets(1);
@@ -76,6 +121,13 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
   const handleEdit = (w: Workout) => {
     setEditingId(w.id);
     setExercise(w.exercise);
+    
+    // Find category for the workout
+    const cat = Object.entries(CATEGORY_MAP).find(([_, list]) => list.includes(w.exercise))?.[0] 
+               || Object.entries(CATEGORY_TO_BODYPART).find(([_, bp]) => bp === w.bodyPart)?.[0] 
+               || '가슴';
+    
+    setSelectedCategory(cat);
     setBodyPart(w.bodyPart);
     setWeight(w.weight);
     setReps(w.reps);
@@ -87,6 +139,7 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
   const cancelEdit = () => {
     setEditingId(null);
     setExercise('');
+    setIsCustom(false);
     setWeight(0);
     setReps(0);
     setSets(1);
@@ -102,8 +155,8 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
 
       {/* Input Form */}
       <section className="px-4">
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-[32px] p-6 flex flex-col gap-4 shadow-sm border border-slate-100 dark:border-slate-800">
-          <div className="flex items-center justify-between mb-2">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-[32px] p-6 flex flex-col gap-6 shadow-sm border border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
                 <Dumbbell size={20} />
@@ -125,101 +178,113 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4">
+          <div className="flex flex-col gap-5">
+            {/* 1. Category Selection */}
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">운동 명</label>
-              <input
-                type="text"
-                list="common-exercises"
-                placeholder="예: 벤치 프레스"
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-200"
-                value={exercise}
-                onChange={(e) => handleExerciseChange(e.target.value)}
-                required
-              />
-              <datalist id="common-exercises">
-                <option value="벤치프레스" />
-                <option value="인클라인벤치프레스" />
-                <option value="펙덱플라이" />
-                <option value="덤벨프레스" />
-                <option value="사레레" />
-                <option value="숄더프레스" />
-                <option value="바벨컬" />
-                <option value="덤벨컬" />
-                <option value="덤벨킥백" />
-                <option value="랫풀다운" />
-                <option value="바벨로우" />
-                <option value="덤벨로우" />
-                <option value="시티드로우" />
-                <option value="스쿼트" />
-                <option value="레그컬" />
-                <option value="레그익스텐션" />
-                <option value="레그프레스" />
-                <option value="힙쓰러스트" />
-                <option value="크런치" />
-                <option value="레그레이즈" />
-                <option value="러시안트위스트" />
-                <option value="데드리프트" />
-                <option value="러닝" />
-                <option value="자전거" />
-              </datalist>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">부위 선택 (자동 분류)</label>
-              <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
-                {BODY_PARTS.map(part => (
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">부위 카테고리</label>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {Object.keys(CATEGORY_MAP).map(cat => (
                   <button
-                    key={part}
+                    key={cat}
                     type="button"
-                    onClick={() => setBodyPart(part)}
-                    className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      bodyPart === part 
-                        ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/20' 
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    onClick={() => handleCategoryChange(cat)}
+                    className={`whitespace-nowrap px-5 py-2.5 rounded-2xl text-xs font-bold transition-all border ${
+                      selectedCategory === cat 
+                        ? 'bg-slate-900 dark:bg-primary-600 text-white border-transparent shadow-lg' 
+                        : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-100 dark:border-slate-800 hover:bg-slate-50'
                     }`}
                   >
-                    {part}
+                    {cat}
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* 2. Exercise Selection */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">운동 선택</label>
+              <div className="flex flex-wrap gap-2">
+                {availableExercises.map(ex => (
+                  <button
+                    key={ex}
+                    type="button"
+                    onClick={() => handleExerciseSelect(ex)}
+                    className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all border ${
+                      exercise === ex && !isCustom
+                        ? 'bg-primary-600 text-white border-transparent shadow-md' 
+                        : 'bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-100'
+                    }`}
+                  >
+                    {ex}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { setIsCustom(true); setExercise(''); }}
+                  className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all border border-dashed ${
+                    isCustom 
+                      ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-300 text-primary-600' 
+                      : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-primary-300 hover:text-primary-500'
+                  }`}
+                >
+                  + 직접 추가
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Custom Exercise Input (Conditional) */}
+            {isCustom && (
+              <div className="animate-slide-up">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">운동명 직접 입력</label>
+                <input
+                  type="text"
+                  placeholder="운동 이름을 입력하세요"
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-primary-100 dark:border-primary-900/30 rounded-[20px] focus:ring-0 focus:border-primary-500 outline-none transition-all dark:text-slate-100 text-sm font-bold"
+                  value={exercise}
+                  onChange={(e) => setExercise(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">무게(kg)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest text-center">무게</label>
                 <input
                   type="number"
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-200"
+                  className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-100 text-center font-bold"
                   value={weight || ''}
                   onChange={(e) => setWeight(Number(e.target.value))}
                 />
+                <span className="block text-center text-[10px] font-bold text-slate-400 mt-1">kg</span>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">횟수</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest text-center">횟수</label>
                 <input
                   type="number"
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-200"
+                  className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-100 text-center font-bold"
                   value={reps || ''}
                   onChange={(e) => setReps(Number(e.target.value))}
                 />
+                <span className="block text-center text-[10px] font-bold text-slate-400 mt-1">reps</span>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">세트</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest text-center">세트</label>
                 <input
                   type="number"
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-200"
+                  className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-100 text-center font-bold"
                   value={sets || ''}
                   onChange={(e) => setSets(Number(e.target.value))}
                 />
+                <span className="block text-center text-[10px] font-bold text-slate-400 mt-1">sets</span>
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">메모</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">메모</label>
               <textarea
-                placeholder="간단한 메모..."
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-200 min-h-[60px]"
+                placeholder="운동 팁이나 메모..."
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-[20px] focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-100 text-sm min-h-[60px]"
                 value={memo}
                 onChange={(e) => setMemo(e.target.value)}
               />
@@ -231,12 +296,12 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
               <button 
                 type="button" 
                 onClick={cancelEdit}
-                className="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl font-bold text-sm"
+                className="flex-1 px-6 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl font-bold text-sm"
               >
                 취소
               </button>
             )}
-            <button type="submit" className="btn-primary flex-1 flex items-center justify-center gap-2">
+            <button type="submit" className="btn-primary flex-1 py-4 flex items-center justify-center gap-2">
               {editingId ? '수정 완료' : '운동 기록하기'}
             </button>
           </div>

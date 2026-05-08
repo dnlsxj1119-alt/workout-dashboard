@@ -182,13 +182,13 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
             {/* 1. Category Selection */}
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">부위 카테고리</label>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {Object.keys(CATEGORY_MAP).map(cat => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => handleCategoryChange(cat)}
-                    className={`whitespace-nowrap px-5 py-2.5 rounded-2xl text-xs font-bold transition-all border ${
+                    className={`px-3 py-3 rounded-2xl text-xs font-bold transition-all border ${
                       selectedCategory === cat 
                         ? 'bg-slate-900 dark:bg-primary-600 text-white border-transparent shadow-lg' 
                         : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-100 dark:border-slate-800 hover:bg-slate-50'

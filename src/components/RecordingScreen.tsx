@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Workout, BodyPart, BODY_PARTS, UserPreferences } from '../types/workout';
+import { Workout, BodyPart, UserPreferences } from '../types/workout';
 import { Trash2, Edit3, Dumbbell, Sparkles, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';

@@ -5,19 +5,20 @@ import {
   PieChart, Pie, AreaChart, Area 
 } from 'recharts';
 import { 
-  TrendingUp, Calendar, Flame, Trophy, BarChart3, PieChart as PieIcon, Activity, Download, Flag, CheckCircle2
+  TrendingUp, Flame, Trophy, BarChart3, PieChart as PieIcon, Download, Flag, CheckCircle2,
+  CalendarDays, Zap, Clock
 } from 'lucide-react';
 import { 
-  getWeeklyStats, 
   getMonthlyStats, 
   getBodyPartStats, 
   getPRRecords, 
   getWorkoutStreak,
   getWeeklyVolumeTrend,
-  getActivityFlow
+  getHeatmapData,
+  getWeekendRatio
 } from '../utils/stats';
 import { generateInsights, Insight } from '../utils/insights';
-import { Lightbulb, ChevronRight, Info } from 'lucide-react';
+import { Lightbulb, ChevronRight } from 'lucide-react';
 import { Goal } from '../types/workout';
 
 interface DashboardScreenProps {
@@ -56,15 +57,57 @@ const InsightCard: React.FC<{ insight: Insight }> = ({ insight }) => {
   );
 };
 
+const Heatmap: React.FC<{ data: { date: string; count: number; level: number }[] }> = ({ data }) => {
+  // Chunk into columns of 7 (weeks)
+  const columns = [];
+  for (let i = 0; i < data.length; i += 7) {
+    columns.push(data.slice(i, i + 7));
+  }
+  // Reverse to show oldest on left, newest on right
+  columns.reverse();
+
+  const getLevelClass = (level: number) => {
+    switch(level) {
+      case 1: return 'bg-emerald-200 dark:bg-emerald-900';
+      case 2: return 'bg-emerald-400 dark:bg-emerald-700';
+      case 3: return 'bg-emerald-600 dark:bg-emerald-500';
+      default: return 'bg-slate-100 dark:bg-slate-800';
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 text-sm uppercase tracking-wider">
+          <CalendarDays size={16} className="text-emerald-500" /> 최근 90일 기록
+        </h3>
+      </div>
+      <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
+        {columns.map((col, cIdx) => (
+          <div key={cIdx} className="flex flex-col gap-1">
+            {col.map((day, dIdx) => (
+              <div 
+                key={dIdx} 
+                className={`w-[14px] h-[14px] rounded-sm ${getLevelClass(day.level)}`}
+                title={`${day.date}: ${day.count}회`}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) => {
   // Memoized data calculations
-  const weekly = useMemo(() => getWeeklyStats(workouts), [workouts]);
   const monthly = useMemo(() => getMonthlyStats(workouts), [workouts]);
   const bodyPartStats = useMemo(() => getBodyPartStats(workouts), [workouts]);
   const prs = useMemo(() => getPRRecords(workouts).slice(0, 3), [workouts]);
   const { streak, daysSinceLast } = useMemo(() => getWorkoutStreak(workouts), [workouts]);
   const weeklyTrend = useMemo(() => getWeeklyVolumeTrend(workouts), [workouts]);
-  const activityFlow = useMemo(() => getActivityFlow(workouts), [workouts]);
+  const heatmapData = useMemo(() => getHeatmapData(workouts, 91), [workouts]);
+  const weekendRatio = useMemo(() => getWeekendRatio(workouts), [workouts]);
   
   const insights = useMemo(() => generateInsights(workouts), [workouts]);
 
@@ -103,86 +146,97 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) =>
         <div className="w-20 h-20 bg-slate-100 dark:bg-slate-900 rounded-[32px] flex items-center justify-center text-slate-300 dark:text-slate-700 mb-6">
           <BarChart3 size={40} />
         </div>
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2">기록을 기다리고 있어요</h2>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2">습관의 시작</h2>
         <p className="text-slate-500 dark:text-slate-400 leading-relaxed mb-8">
-          오늘의 첫 운동을 기록하면<br/>멋진 대시보드가 활성화됩니다.
+          오늘의 첫 운동을 기록하면<br/>나만의 분석 대시보드가 열립니다.
         </p>
       </div>
     );
   }
 
+  // Goal calculation (Frequency based)
+  const currentGoal = goals[0] || { type: 'frequency', target: 20 };
+  const targetAchieved = monthly.count >= currentGoal.target;
+  const progressPercent = Math.min(100, Math.round((monthly.count / currentGoal.target) * 100));
+
   return (
     <div className="flex flex-col gap-6 pb-32 animate-fade-in bg-slate-50 dark:bg-slate-950 transition-colors">
       <header className="px-6 py-2 flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">분석 통계</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">필터링된 데이터 기반 리포트</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">나의 운동 습관</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">꾸준함이 만드는 변화</p>
         </div>
         <button 
           onClick={exportToCSV}
-          className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400"
+          className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50"
         >
           <Download size={18} />
         </button>
       </header>
 
-      {/* Goal Tracking */}
-      {goals.length > 0 && (
-        <section className="px-6">
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 text-sm uppercase tracking-wider">
-                <Flag size={16} className="text-primary-500" /> 월간 목표 달성도
-              </h3>
-              <span className="text-[10px] font-bold text-primary-500">
-                {Math.min(100, Math.round((monthly.totalVolume / goals[0].target) * 100))}%
+      {/* Goal Tracking (Frequency) */}
+      <section className="px-6">
+        <div className="bg-gradient-to-br from-primary-600 to-indigo-600 dark:from-primary-900 dark:to-indigo-900 rounded-[40px] p-8 text-white relative overflow-hidden shadow-2xl">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10" />
+          <div className="relative z-10">
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center gap-2">
+                <Flag size={20} className="text-primary-200" />
+                <h3 className="text-lg font-bold tracking-tight">이번 달 운동 목표</h3>
+              </div>
+              <span className="text-sm font-black text-white/80 bg-white/20 px-3 py-1 rounded-full">
+                달성률 {progressPercent}%
               </span>
             </div>
-            <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-3">
+            
+            <div className="flex items-baseline gap-2 mb-4">
+              <span className="text-5xl font-black">{monthly.count}</span>
+              <span className="text-xl font-bold text-white/60">/ {currentGoal.target}일</span>
+            </div>
+
+            <div className="h-4 w-full bg-black/20 rounded-full overflow-hidden mb-6">
               <div 
-                className="h-full bg-primary-500 transition-all duration-1000" 
-                style={{ width: `${Math.min(100, (monthly.totalVolume / goals[0].target) * 100)}%` }} 
+                className="h-full bg-white transition-all duration-1000" 
+                style={{ width: `${progressPercent}%` }} 
               />
             </div>
-            <div className="flex justify-between items-end">
+
+            <div className="flex justify-between items-center pt-6 border-t border-white/20">
               <div>
-                <p className="text-xs font-bold text-slate-400">현재 {monthly.totalVolume.toLocaleString()}kg</p>
-                <p className="text-[10px] text-slate-400">목표 {goals[0].target.toLocaleString()}kg</p>
+                <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">월간 총 볼륨</p>
+                <p className="text-lg font-bold">{monthly.totalVolume.toLocaleString()} <span className="text-xs">kg</span></p>
               </div>
-              {monthly.totalVolume >= goals[0].target && (
-                <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-full uppercase">
-                  <CheckCircle2 size={12} /> GOAL REACHED!
+              {targetAchieved && (
+                <div className="flex items-center gap-1 text-xs font-black text-emerald-400 uppercase">
+                  <CheckCircle2 size={16} /> 목표 달성!
                 </div>
               )}
             </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* Insights Section */}
       <section className="px-6 flex flex-col gap-3">
         <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">오늘의 인사이트</h3>
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
-          {insights.length > 0 ? (
-            insights.map((insight) => (
-              <div key={insight.id} className="snap-center">
-                <InsightCard insight={insight} />
-              </div>
-            ))
-          ) : (
-            <div className="w-full p-8 bg-slate-100 dark:bg-slate-900/50 rounded-[32px] border border-dashed border-slate-200 dark:border-slate-800 flex items-center gap-4 text-slate-400">
-              <Info size={24} />
-              <p className="text-xs font-medium leading-relaxed">
-                데이터를 조금 더 쌓으면<br/>맞춤형 인사이트를 분석해 드릴게요!
-              </p>
+          {insights.map((insight) => (
+            <div key={insight.id} className="snap-center">
+              <InsightCard insight={insight} />
             </div>
-          )}
+          ))}
         </div>
       </section>
 
-      {/* Highlights: Streak & Last Activity */}
+      {/* Heatmap Section */}
+      <section className="px-6">
+        <Heatmap data={heatmapData} />
+      </section>
+
+      {/* Pattern Analysis Cards */}
       <section className="px-6 grid grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group">
+        {/* Streak */}
+        <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden">
           <div className="flex justify-between items-start mb-4">
             <div className="w-10 h-10 rounded-2xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-orange-500">
               <Flame size={20} fill="currentColor" />
@@ -190,166 +244,169 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) =>
             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">STREAK</span>
           </div>
           <p className="text-3xl font-black text-slate-900 dark:text-slate-100">{streak}일</p>
-          <div className="mt-2 flex gap-1">
-            {activityFlow.map((day, i) => (
-              <div 
-                key={i} 
-                className={`h-1 flex-1 rounded-full ${day.active ? 'bg-orange-400' : 'bg-slate-100 dark:bg-slate-800'}`}
-              />
-            ))}
-          </div>
+          <p className="text-xs font-bold text-slate-400 mt-2">연속 운동 중</p>
         </div>
 
+        {/* Status / Rest */}
         <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800">
           <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-2xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center text-primary-500">
-              <Activity size={20} />
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500">
+              <Zap size={20} />
             </div>
             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">STATUS</span>
           </div>
           <p className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight">
-            {daysSinceLast === 0 ? '오늘 완료' : `${daysSinceLast}일째 휴식`}
+            {daysSinceLast === 0 ? '오늘 완료!' : `${daysSinceLast}일째 휴식`}
           </p>
+          <p className="text-xs font-bold text-slate-400 mt-2">마지막 운동</p>
         </div>
-      </section>
 
-      {/* 1. Weekly Volume Trend (Line Chart) */}
-      <section className="px-6">
-        <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <TrendingUp size={18} className="text-primary-500" /> 주간 볼륨 추이
-            </h3>
-            <span className="text-xs font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 px-2 py-1 rounded-lg">
-              {weekly.totalVolume.toLocaleString()} kg
-            </span>
-          </div>
-          <div className="h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={weeklyTrend}>
-                <defs>
-                  <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="opacity-10" />
-                <XAxis 
-                  dataKey="day" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }}
-                />
-                <YAxis hide />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', background: '#fff' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="volume" 
-                  stroke="#0ea5e9" 
-                  strokeWidth={3}
-                  fillOpacity={1} 
-                  fill="url(#colorVolume)" 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
-
-      {/* Monthly Report Card (Minimalist Apple Card style) */}
-      <section className="px-6">
-        <div className="bg-gradient-to-br from-slate-900 to-black dark:from-slate-800 dark:to-slate-950 rounded-[40px] p-8 text-white relative overflow-hidden shadow-2xl">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-primary-500/10 rounded-full blur-3xl -mr-10 -mt-10" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-8">
-              <Calendar size={20} className="text-primary-400" />
-              <h3 className="text-lg font-bold tracking-tight">이달의 리포트</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-8">
-              <div>
-                <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">월간 볼륨</p>
-                <p className="text-2xl font-black">{monthly.totalVolume.toLocaleString()} <span className="text-sm font-medium text-white/50">kg</span></p>
+        {/* Weekend vs Weekday */}
+        <div className="col-span-2 bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center text-violet-500">
+                <Clock size={16} />
               </div>
-              <div>
-                <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">운동 횟수</p>
-                <p className="text-2xl font-black">{monthly.count} <span className="text-sm font-medium text-white/50">일</span></p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">운동 성향</h3>
+            </div>
+          </div>
+          <div className="flex items-end gap-2 mb-2">
+            <div className="flex-1">
+              <div className="flex justify-between mb-1">
+                <span className="text-xs font-bold text-slate-500">평일</span>
+                <span className="text-xs font-black text-slate-700 dark:text-slate-300">{weekendRatio.weekday}%</span>
+              </div>
+              <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-violet-400" style={{ width: `${weekendRatio.weekday}%` }} />
               </div>
             </div>
-            <div className="mt-8 pt-8 border-t border-white/10 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-white/60">당신의 노력이</p>
-                <p className="text-sm font-black text-primary-400">결과로 증명됩니다.</p>
+            <div className="flex-1">
+              <div className="flex justify-between mb-1">
+                <span className="text-xs font-bold text-slate-500">주말</span>
+                <span className="text-xs font-black text-slate-700 dark:text-slate-300">{weekendRatio.weekend}%</span>
               </div>
-              <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                <Trophy size={24} className="text-yellow-400" />
+              <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-rose-400" style={{ width: `${weekendRatio.weekend}%` }} />
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 2. Body Part Ratio (Pie Chart) */}
-      <section className="px-6 grid grid-cols-1 gap-6">
-        <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-6 flex items-center gap-2">
-            <PieIcon size={18} className="text-rose-500" /> 부위별 운동 비중
-          </h3>
-          <div className="h-48 flex items-center">
-            <div className="w-1/2 h-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={bodyPartStats}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={70}
-                    paddingAngle={8}
-                    dataKey="count"
-                  >
-                    {bodyPartStats.map((_entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+      {/* Advanced Charts: Render only if we have enough data (e.g. > 3 workouts) */}
+      {workouts.length > 3 && (
+        <>
+          <section className="px-6">
+            <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <TrendingUp size={18} className="text-primary-500" /> 주간 볼륨 추이
+                </h3>
+              </div>
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={weeklyTrend}>
+                    <defs>
+                      <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="opacity-10" />
+                    <XAxis 
+                      dataKey="day" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }}
+                    />
+                    <YAxis hide />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', background: '#fff' }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="volume" 
+                      stroke="#0ea5e9" 
+                      strokeWidth={3}
+                      fillOpacity={1} 
+                      fill="url(#colorVolume)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="w-1/2 flex flex-col gap-2 pl-4">
-              {bodyPartStats.slice(0, 4).map((stat, idx) => (
-                <div key={stat.name} className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{stat.name}</span>
-                  <span className="text-[11px] text-slate-400 ml-auto">{stat.percentage}%</span>
+          </section>
+
+          <section className="px-6 grid grid-cols-1 gap-6">
+            <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-6 flex items-center gap-2">
+                <PieIcon size={18} className="text-rose-500" /> 부위별 운동 비중
+              </h3>
+              <div className="h-48 flex items-center">
+                <div className="w-1/2 h-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={bodyPartStats}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={70}
+                        paddingAngle={8}
+                        dataKey="count"
+                      >
+                        {bodyPartStats.map((_entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. PR Records */}
-      <section className="px-6 mb-12">
-        <div className="bg-slate-900 dark:bg-slate-900 rounded-[40px] p-8 text-white relative overflow-hidden border border-slate-800">
-          <h3 className="font-bold mb-6 flex items-center gap-2">
-            <Trophy size={20} className="text-yellow-400" /> 개인 최고 기록 (PR)
-          </h3>
-          <div className="space-y-4">
-            {prs.length > 0 ? prs.map((pr, idx) => (
-              <div key={idx} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
-                <div>
-                  <p className="text-sm font-bold text-white">{pr.exercise}</p>
-                  <p className="text-[10px] text-white/40">{new Date(pr.date).toLocaleDateString()}</p>
+                <div className="w-1/2 flex flex-col gap-2 pl-4">
+                  {bodyPartStats.slice(0, 4).map((stat, idx) => (
+                    <div key={stat.name} className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                      <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{stat.name}</span>
+                      <span className="text-[11px] text-slate-400 ml-auto">{stat.percentage}%</span>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-xl font-black text-white">{pr.weight} <span className="text-[10px] font-bold text-white/50 uppercase">kg</span></p>
               </div>
-            )) : (
-              <p className="text-sm text-white/30 text-center py-4">아직 PR 기록이 없습니다.</p>
-            )}
+            </div>
+          </section>
+
+          {prs.length > 0 && (
+            <section className="px-6 mb-12">
+              <div className="bg-slate-900 dark:bg-slate-900 rounded-[40px] p-8 text-white relative overflow-hidden border border-slate-800">
+                <h3 className="font-bold mb-6 flex items-center gap-2">
+                  <Trophy size={20} className="text-yellow-400" /> 최고 기록 (PR)
+                </h3>
+                <div className="space-y-4">
+                  {prs.map((pr, idx) => (
+                    <div key={idx} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
+                      <div>
+                        <p className="text-sm font-bold text-white">{pr.exercise}</p>
+                        <p className="text-[10px] text-white/40">{new Date(pr.date).toLocaleDateString()}</p>
+                      </div>
+                      <p className="text-xl font-black text-white">{pr.weight} <span className="text-[10px] font-bold text-white/50 uppercase">kg</span></p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+      
+      {workouts.length <= 3 && (
+        <section className="px-6 mb-12">
+          <div className="p-8 bg-slate-100 dark:bg-slate-900/50 rounded-[32px] border border-dashed border-slate-200 dark:border-slate-800 text-center text-slate-400">
+            <BarChart3 size={32} className="mx-auto mb-4 opacity-30" />
+            <p className="text-sm font-medium">기록이 더 쌓이면<br/>상세한 차트 분석이 제공됩니다!</p>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 };

@@ -219,3 +219,49 @@ export const getActivityFlow = (workouts: Workout[]) => {
   }
   return flow;
 };
+
+/**
+ * Get heatmap data for the last N days (e.g., 90 days)
+ */
+export const getHeatmapData = (workouts: Workout[], days: number = 90) => {
+  const data = [];
+  const today = startOfDay(new Date());
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const targetDate = subDays(today, i);
+    const dateStr = format(targetDate, 'yyyy-MM-dd');
+    const workoutCount = workouts.filter(w => isSameDay(parseISO(w.date), targetDate)).length;
+    
+    data.push({
+      date: dateStr,
+      count: workoutCount,
+      level: workoutCount === 0 ? 0 : workoutCount < 3 ? 1 : workoutCount < 5 ? 2 : 3
+    });
+  }
+  return data;
+};
+
+/**
+ * Get ratio of weekend vs weekday workouts
+ */
+export const getWeekendRatio = (workouts: Workout[]) => {
+  if (workouts.length === 0) return { weekend: 0, weekday: 0 };
+  
+  const uniqueWorkoutDays = Array.from(new Set(workouts.map(w => format(parseISO(w.date), 'yyyy-MM-dd'))));
+  
+  let weekendCount = 0;
+  let weekdayCount = 0;
+  
+  uniqueWorkoutDays.forEach(dateStr => {
+    const date = parseISO(dateStr);
+    const day = date.getDay(); // 0 is Sunday, 6 is Saturday
+    if (day === 0 || day === 6) weekendCount++;
+    else weekdayCount++;
+  });
+  
+  const total = uniqueWorkoutDays.length;
+  return {
+    weekend: Math.round((weekendCount / total) * 100),
+    weekday: Math.round((weekdayCount / total) * 100)
+  };
+};

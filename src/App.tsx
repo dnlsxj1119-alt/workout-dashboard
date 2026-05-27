@@ -11,7 +11,7 @@ import { Goal, UserPreferences } from './types/workout';
 const App: React.FC = () => {
   const [workouts, setWorkouts] = useLocalStorage<Workout[]>('workout-data', []);
   const [goals, setGoals] = useLocalStorage<Goal[]>('workout-goals', [
-    { id: '1', type: 'volume', target: 50000, period: 'month', startDate: new Date().toISOString() }
+    { id: '1', type: 'frequency', target: 20, period: 'month', startDate: new Date().toISOString() }
   ]);
   const [userPrefs, setUserPrefs] = useLocalStorage<UserPreferences>('user-preferences', {});
   const [darkMode, setDarkMode] = useLocalStorage<boolean>('dark-mode', false);

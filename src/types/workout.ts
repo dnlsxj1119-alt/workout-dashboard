@@ -16,7 +16,7 @@ export const BODY_PARTS: BodyPart[] = ['가슴', '등', '어깨', '팔', '하체
 
 export interface Goal {
   id: string;
-  type: 'volume' | 'count';
+  type: 'volume' | 'frequency';
   target: number;
   period: 'month';
   bodyPart?: BodyPart | '전체';

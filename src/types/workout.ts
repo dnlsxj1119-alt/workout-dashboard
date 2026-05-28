@@ -1,11 +1,18 @@
+export interface SetRecord {
+  setNumber: number;
+  weight: number;
+  reps: number;
+}
+
 export interface Workout {
   id: string;
   date: string; // ISO string
   exercise: string;
   bodyPart: BodyPart;
-  weight: number;
-  reps: number;
-  sets: number;
+  weight: number; // For backwards compatibility
+  reps: number; // For backwards compatibility
+  sets: number; // For backwards compatibility
+  setRecords?: SetRecord[];
   memo: string;
   createdAt: string; // ISO string
 }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Workout, BodyPart, UserPreferences } from '../types/workout';
+import { Workout, BodyPart, UserPreferences, SetRecord } from '../types/workout';
 import { Trash2, Edit3, Dumbbell, Sparkles, AlertCircle, Plus, X, Calendar as CalendarIcon, Minus, CheckCircle2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { predictBodyPart } from '../utils/classification';
@@ -42,9 +42,11 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
   const [exercise, setExercise] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('가슴');
   const [bodyPart, setBodyPart] = useState<BodyPart>('가슴');
-  const [weight, setWeight] = useState<number>(0);
-  const [reps, setReps] = useState<number>(0);
-  const [sets, setSets] = useState<number>(3);
+  const [setRecords, setSetRecords] = useState<SetRecord[]>([
+    { setNumber: 1, weight: 0, reps: 0 },
+    { setNumber: 2, weight: 0, reps: 0 },
+    { setNumber: 3, weight: 0, reps: 0 }
+  ]);
   const [memo, setMemo] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -75,6 +77,29 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
       }
       return <span key={index}>{part}</span>;
     });
+  };
+  const updateSet = (index: number, field: keyof SetRecord, value: number) => {
+    const newSets = [...setRecords];
+    newSets[index] = { ...newSets[index], [field]: value };
+    setSetRecords(newSets);
+  };
+
+  const addSet = () => {
+    const lastSet = setRecords[setRecords.length - 1];
+    setSetRecords([
+      ...setRecords, 
+      { 
+        setNumber: setRecords.length + 1, 
+        weight: lastSet ? lastSet.weight : 0, 
+        reps: lastSet ? lastSet.reps : 0 
+      }
+    ]);
+  };
+
+  const removeSet = (index: number) => {
+    if (setRecords.length <= 1) return;
+    const newSets = setRecords.filter((_, i) => i !== index).map((s, i) => ({ ...s, setNumber: i + 1 }));
+    setSetRecords(newSets);
   };
   
   const formRef = useRef<HTMLDivElement>(null);
@@ -110,11 +135,13 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
 
   // PR detection for current exercise
   const isPotentialPR = useMemo(() => {
-    if (!exercise || weight <= 0) return false;
+    if (!exercise || setRecords.length === 0) return false;
+    const maxWeight = Math.max(...setRecords.map(s => s.weight));
+    if (maxWeight <= 0) return false;
     const prs = getPRRecords(workouts);
     const currentPR = prs.find(p => p.exercise.toLowerCase() === exercise.toLowerCase());
-    return !currentPR || weight > currentPR.weight;
-  }, [exercise, weight, workouts]);
+    return !currentPR || maxWeight > currentPR.weight;
+  }, [exercise, setRecords, workouts]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,7 +150,7 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
       showToast('필수 정보를 확인해주세요 (운동 선택)', 'error');
       return;
     }
-    if (weight < 0 || reps < 0 || sets < 1) {
+    if (setRecords.some(s => s.weight < 0 || s.reps < 0)) {
       setError('올바른 수치를 입력해주세요.');
       showToast('필수 정보를 확인해주세요 (수치 입력)', 'error');
       return;
@@ -131,19 +158,28 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     
     setError('');
 
+    // Prepare legacy stats for old stats logic fallback if needed
+    const totalSets = setRecords.length;
+    const topWeight = Math.max(0, ...setRecords.map(s => s.weight));
+    const totalReps = setRecords.reduce((sum, s) => sum + s.reps, 0);
+    const avgReps = totalSets > 0 ? Math.round(totalReps / totalSets) : 0;
+
+    const workoutData = {
+      date: new Date(date).toISOString(), 
+      exercise, 
+      bodyPart, 
+      setRecords,
+      weight: topWeight, // Backwards compatible fields
+      reps: avgReps,     // Backwards compatible fields
+      sets: totalSets,   // Backwards compatible fields
+      memo 
+    };
+
     if (editingId) {
-      onUpdate(editingId, { date: new Date(date).toISOString(), exercise, bodyPart, weight, reps, sets, memo });
+      onUpdate(editingId, workoutData);
       setEditingId(null);
     } else {
-      onAdd({ 
-        date: new Date(date).toISOString(), 
-        exercise, 
-        bodyPart, 
-        weight, 
-        reps, 
-        sets, 
-        memo 
-      });
+      onAdd(workoutData);
       // Learn preference
       onUpdatePrefs(exercise.trim().toLowerCase().replace(/\s+/g, ''), bodyPart);
     }
@@ -151,8 +187,11 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     // Reset form but keep date and category for rapid entry
     setExercise('');
     setIsCustom(false);
-    setWeight(0);
-    setReps(0);
+    setSetRecords([
+      { setNumber: 1, weight: 0, reps: 0 },
+      { setNumber: 2, weight: 0, reps: 0 },
+      { setNumber: 3, weight: 0, reps: 0 }
+    ]);
     setMemo('');
     
     showToast('기록이 저장되었습니다', 'success');
@@ -177,10 +216,15 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     
     setSelectedCategory(cat);
     setBodyPart(w.bodyPart);
-    setWeight(w.weight);
-    setReps(w.reps);
-    setSets(w.sets);
-    setMemo(w.memo);
+    
+    const initialRecords = w.setRecords || Array.from({ length: w.sets || 3 }).map((_, i) => ({
+      setNumber: i + 1,
+      weight: w.weight || 0,
+      reps: w.reps || 0
+    }));
+    setSetRecords(initialRecords);
+    
+    setMemo(w.memo || '');
     
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -191,9 +235,12 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     setEditingId(null);
     setExercise('');
     setIsCustom(false);
-    setWeight(0);
-    setReps(0);
-    setSets(3);
+    const initialEmptyRecords = [
+      { setNumber: 1, weight: 0, reps: 0 },
+      { setNumber: 2, weight: 0, reps: 0 },
+      { setNumber: 3, weight: 0, reps: 0 }
+    ];
+    setSetRecords(initialEmptyRecords);
     setMemo('');
     setIsFormVisible(false);
   };
@@ -206,9 +253,12 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
       setEditingId(null);
       setExercise('');
       setIsCustom(false);
-      setWeight(0);
-      setReps(0);
-      setSets(3);
+      const initialEmptyRecords = [
+        { setNumber: 1, weight: 0, reps: 0 },
+        { setNumber: 2, weight: 0, reps: 0 },
+        { setNumber: 3, weight: 0, reps: 0 }
+      ];
+      setSetRecords(initialEmptyRecords);
       setMemo('');
       setIsFormVisible(true);
     }
@@ -278,20 +328,34 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
                   </div>
                 </div>
                 
-                <div className="flex gap-4 text-slate-600 dark:text-slate-300">
-                  <div className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl flex-1 text-center">
-                    <p className="text-[10px] text-slate-400 uppercase font-semibold">무게</p>
-                    <p className="font-bold">{w.weight}kg</p>
+                {w.setRecords ? (
+                  <div className="flex flex-col gap-1 mt-2 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                    {w.setRecords.map(s => (
+                      <div key={s.setNumber} className="flex justify-between items-center text-xs py-1">
+                        <span className="text-slate-500 font-bold">{s.setNumber}세트</span>
+                        <div className="flex gap-4 font-black text-slate-700 dark:text-slate-200">
+                          <span className="w-12 text-right">{s.weight}kg</span>
+                          <span className="w-12 text-right">{s.reps}회</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl flex-1 text-center">
-                    <p className="text-[10px] text-slate-400 uppercase font-semibold">횟수</p>
-                    <p className="font-bold">{w.reps}회</p>
+                ) : (
+                  <div className="flex gap-4 text-slate-600 dark:text-slate-300">
+                    <div className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl flex-1 text-center border border-slate-100 dark:border-slate-700/50">
+                      <p className="text-[10px] text-slate-400 uppercase font-semibold">무게</p>
+                      <p className="font-bold">{w.weight}kg</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl flex-1 text-center border border-slate-100 dark:border-slate-700/50">
+                      <p className="text-[10px] text-slate-400 uppercase font-semibold">횟수</p>
+                      <p className="font-bold">{w.reps}회</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl flex-1 text-center border border-slate-100 dark:border-slate-700/50">
+                      <p className="text-[10px] text-slate-400 uppercase font-semibold">세트</p>
+                      <p className="font-bold">{w.sets}세트</p>
+                    </div>
                   </div>
-                  <div className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl flex-1 text-center">
-                    <p className="text-[10px] text-slate-400 uppercase font-semibold">세트</p>
-                    <p className="font-bold">{w.sets}세트</p>
-                  </div>
-                </div>
+                )}
                 
                 {w.memo && (
                   <div className="mt-3 p-3 bg-amber-50/50 dark:bg-amber-900/20 rounded-xl text-sm text-slate-600 dark:text-slate-300 border border-amber-100/50 dark:border-amber-900/30 whitespace-pre-wrap">
@@ -427,48 +491,52 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
                 </div>
               )}
 
-              {/* 4. Values Input */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest text-center">무게 (kg)</label>
-                  <input
-                    type="number"
-                    className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-100 text-center font-bold text-lg"
-                    value={weight || ''}
-                    onChange={(e) => setWeight(Number(e.target.value))}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest text-center">횟수 (reps)</label>
-                  <input
-                    type="number"
-                    className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-100 text-center font-bold text-lg"
-                    value={reps || ''}
-                    onChange={(e) => setReps(Number(e.target.value))}
-                  />
-                </div>
-              </div>
-
-              {/* 5. Sets Stepper */}
+              {/* Sets Input rows */}
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest text-center">세트 수</label>
-                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 p-2 rounded-3xl">
-                  <button 
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-2 block tracking-widest">세트별 기록</label>
+                <div className="flex flex-col gap-2">
+                  {setRecords.map((set, idx) => (
+                    <div key={set.setNumber} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+                      <div className="w-12 text-center text-xs font-bold text-slate-500">{set.setNumber}세트</div>
+                      
+                      <div className="flex-1 relative">
+                        <input
+                          type="number"
+                          placeholder="무게"
+                          value={set.weight || ''}
+                          onChange={(e) => updateSet(idx, 'weight', Number(e.target.value))}
+                          className="w-full h-[48px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 text-center text-sm font-bold focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 pointer-events-none">KG</span>
+                      </div>
+
+                      <div className="flex-1 relative">
+                        <input
+                          type="number"
+                          placeholder="횟수"
+                          value={set.reps || ''}
+                          onChange={(e) => updateSet(idx, 'reps', Number(e.target.value))}
+                          className="w-full h-[48px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 text-center text-sm font-bold focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 pointer-events-none">회</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeSet(idx)}
+                        className="w-[48px] h-[48px] rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                      >
+                        <Minus size={18} />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <button
                     type="button"
-                    onClick={() => setSets(Math.max(1, sets - 1))}
-                    className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-sm hover:bg-slate-100 dark:hover:bg-slate-600"
+                    onClick={addSet}
+                    className="mt-2 h-[48px] w-full border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-primary-300 hover:text-primary-500 transition-all"
                   >
-                    <Minus size={20} />
-                  </button>
-                  <div className="flex-1 text-center font-black text-2xl text-slate-800 dark:text-slate-100">
-                    {sets} <span className="text-sm font-bold text-slate-400">sets</span>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={() => setSets(sets + 1)}
-                    className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-sm hover:bg-slate-100 dark:hover:bg-slate-600"
-                  >
-                    <Plus size={20} />
+                    <Plus size={16} /> 세트 추가
                   </button>
                 </div>
               </div>

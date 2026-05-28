@@ -13,7 +13,12 @@ import { ko } from 'date-fns/locale';
 import { Workout } from '../types/workout';
 
 // Helper to calculate volume for a single workout
-export const calculateVolume = (w: Workout) => (w.weight || 0) * (w.reps || 0) * (w.sets || 0);
+export const calculateVolume = (w: Workout) => {
+  if (w.setRecords && w.setRecords.length > 0) {
+    return w.setRecords.reduce((sum, set) => sum + (set.weight * set.reps), 0);
+  }
+  return (w.weight || 0) * (w.reps || 0) * (w.sets || 0);
+};
 
 /**
  * Get stats for a specific date (defaults to today)
@@ -99,8 +104,13 @@ export const getExerciseStats = (workouts: Workout[]) => {
 export const getPRRecords = (workouts: Workout[]) => {
   const prs: Record<string, { weight: number; date: string }> = {};
   workouts.forEach(w => {
-    if (!prs[w.exercise] || w.weight > prs[w.exercise].weight) {
-      prs[w.exercise] = { weight: w.weight, date: w.date };
+    let maxWeight = w.weight || 0;
+    if (w.setRecords && w.setRecords.length > 0) {
+      maxWeight = Math.max(...w.setRecords.map(s => s.weight));
+    }
+    
+    if (!prs[w.exercise] || maxWeight > prs[w.exercise].weight) {
+      prs[w.exercise] = { weight: maxWeight, date: w.date };
     }
   });
   return Object.entries(prs).map(([exercise, data]) => ({

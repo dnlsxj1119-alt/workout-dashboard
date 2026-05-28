@@ -8,15 +8,19 @@ import BottomNav from './components/BottomNav';
 import FilterBar from './components/FilterBar';
 import { FilterState, initialFilterState, filterWorkouts, sortWorkouts } from './utils/filters';
 import { Goal, UserPreferences, BodyComposition } from './types/workout';
+import { STORAGE_KEYS } from './utils/storage';
+import SettingsModal from './components/SettingsModal';
 
 const App: React.FC = () => {
-  const [workouts, setWorkouts] = useLocalStorage<Workout[]>('workout-data', []);
-  const [goals, setGoals] = useLocalStorage<Goal[]>('workout-goals', [
+  const [workouts, setWorkouts] = useLocalStorage<Workout[]>(STORAGE_KEYS.WORKOUT_RECORDS, []);
+  const [goals, setGoals] = useLocalStorage<Goal[]>(STORAGE_KEYS.WORKOUT_GOALS, [
     { id: '1', type: 'frequency', target: 20, period: 'month', startDate: new Date().toISOString() }
   ]);
-  const [userPrefs, setUserPrefs] = useLocalStorage<UserPreferences>('user-preferences', {});
-  const [darkMode, setDarkMode] = useLocalStorage<boolean>('dark-mode', false);
-  const [bodyComps, setBodyComps] = useLocalStorage<BodyComposition[]>('body-compositions', []);
+  const [userPrefs, setUserPrefs] = useLocalStorage<UserPreferences>(STORAGE_KEYS.USER_PREFERENCES, {});
+  const [darkMode, setDarkMode] = useLocalStorage<boolean>(STORAGE_KEYS.DARK_MODE, false);
+  const [bodyComps, setBodyComps] = useLocalStorage<BodyComposition[]>(STORAGE_KEYS.BODY_COMPOSITIONS, []);
+  
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'recording' | 'dashboard' | 'body'>('recording');
   const [filters, setFilters] = useState<FilterState>(initialFilterState);
@@ -75,12 +79,20 @@ const App: React.FC = () => {
       <div className="sticky top-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md z-30 pt-4 px-4 flex flex-col gap-2">
         <div className="flex justify-between items-center mb-2">
           <span className="text-xs font-black tracking-tighter text-primary-600 dark:text-primary-400">ANTIGRAVITY WORKOUT</span>
-          <button 
-            onClick={() => setDarkMode(!darkMode)}
-            className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-400"
-          >
-            {darkMode ? <span className="text-xs">☀️ Light</span> : <span className="text-xs">🌙 Dark</span>}
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-slate-600"
+            >
+              ⚙️
+            </button>
+            <button 
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-400"
+            >
+              {darkMode ? <span className="text-xs">☀️ Light</span> : <span className="text-xs">🌙 Dark</span>}
+            </button>
+          </div>
         </div>
         <FilterBar filters={filters} onFilterChange={setFilters} />
       </div>
@@ -113,6 +125,11 @@ const App: React.FC = () => {
       </main>
 
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+      />
     </div>
   );
 };

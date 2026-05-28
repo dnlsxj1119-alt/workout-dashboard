@@ -202,8 +202,15 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     if (isFormVisible && !editingId) {
       setIsFormVisible(false);
     } else {
+      // Reset form state for new entry
+      setEditingId(null);
+      setExercise('');
+      setIsCustom(false);
+      setWeight(0);
+      setReps(0);
+      setSets(3);
+      setMemo('');
       setIsFormVisible(true);
-      cancelEdit(); // Reset any edit state
     }
   };
 

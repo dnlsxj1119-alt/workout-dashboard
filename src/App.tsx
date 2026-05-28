@@ -3,10 +3,11 @@ import { Workout } from './types/workout';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import RecordingScreen from './components/RecordingScreen';
 import DashboardScreen from './components/DashboardScreen';
+import BodyScreen from './components/BodyScreen';
 import BottomNav from './components/BottomNav';
 import FilterBar from './components/FilterBar';
 import { FilterState, initialFilterState, filterWorkouts, sortWorkouts } from './utils/filters';
-import { Goal, UserPreferences } from './types/workout';
+import { Goal, UserPreferences, BodyComposition } from './types/workout';
 
 const App: React.FC = () => {
   const [workouts, setWorkouts] = useLocalStorage<Workout[]>('workout-data', []);
@@ -15,8 +16,9 @@ const App: React.FC = () => {
   ]);
   const [userPrefs, setUserPrefs] = useLocalStorage<UserPreferences>('user-preferences', {});
   const [darkMode, setDarkMode] = useLocalStorage<boolean>('dark-mode', false);
+  const [bodyComps, setBodyComps] = useLocalStorage<BodyComposition[]>('body-compositions', []);
   
-  const [activeTab, setActiveTab] = useState<'recording' | 'dashboard'>('recording');
+  const [activeTab, setActiveTab] = useState<'recording' | 'dashboard' | 'body'>('recording');
   const [filters, setFilters] = useState<FilterState>(initialFilterState);
 
   // Apply dark mode to body
@@ -53,6 +55,20 @@ const App: React.FC = () => {
     }
   };
 
+  const addBodyComp = (comp: Omit<BodyComposition, 'id' | 'createdAt'>) => {
+    setBodyComps([...bodyComps, { ...comp, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
+  };
+
+  const updateBodyComp = (id: string, updatedFields: Partial<BodyComposition>) => {
+    setBodyComps(bodyComps.map(c => c.id === id ? { ...c, ...updatedFields } : c));
+  };
+
+  const deleteBodyComp = (id: string) => {
+    if (window.confirm('체성분 기록을 삭제하시겠습니까?')) {
+      setBodyComps(bodyComps.filter(c => c.id !== id));
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 dark:bg-slate-950 font-sans pb-24 transition-colors">
       {/* Shared Header or Filter at the top */}
@@ -79,11 +95,19 @@ const App: React.FC = () => {
             userPrefs={userPrefs}
             onUpdatePrefs={(name, part) => setUserPrefs({ ...userPrefs, [name]: part })}
           />
-        ) : (
+        ) : activeTab === 'dashboard' ? (
           <DashboardScreen 
             workouts={filteredWorkouts} 
             goals={goals}
             onUpdateGoals={setGoals}
+            bodyComps={bodyComps}
+          />
+        ) : (
+          <BodyScreen
+            bodyComps={bodyComps}
+            onAdd={addBodyComp}
+            onUpdate={updateBodyComp}
+            onDelete={deleteBodyComp}
           />
         )}
       </main>

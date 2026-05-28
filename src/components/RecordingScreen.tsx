@@ -173,14 +173,6 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">운동 기록</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">총 {workouts.length}개의 기록</p>
         </div>
-        {!isFormVisible && (
-          <button 
-            onClick={toggleForm}
-            className="w-10 h-10 rounded-full bg-primary-600 text-white flex items-center justify-center shadow-lg shadow-primary-500/30 hover:scale-105 transition-transform"
-          >
-            <Plus size={24} />
-          </button>
-        )}
       </header>
 
       {/* History List - First in the flow */}
@@ -259,30 +251,31 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
         )}
       </section>
 
-      {/* Conditional Input Form */}
+      {/* Full Screen Modal Form */}
       {isFormVisible && (
-        <section className="px-4 mt-4" ref={formRef}>
-          <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-[32px] p-6 flex flex-col gap-6 shadow-sm border border-primary-100 dark:border-primary-900/30 ring-4 ring-primary-50 dark:ring-primary-900/10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
-                  <Dumbbell size={20} />
-                </div>
-                <h2 className="text-lg font-bold text-slate-700 dark:text-slate-200">
-                  {editingId ? '기록 수정' : '새 운동 추가'}
-                </h2>
+        <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-[60] flex flex-col animate-slide-up overflow-y-auto pb-safe">
+          <div className="sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md px-6 py-4 flex justify-between items-center border-b border-slate-100 dark:border-slate-800 z-10">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
+                <Dumbbell size={20} />
               </div>
-              <div className="flex items-center gap-2">
-                {isPotentialPR && !editingId && (
-                  <span className="flex items-center gap-1 text-[10px] font-black text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-full animate-bounce">
-                    <Sparkles size={10} /> NEW PR!
-                  </span>
-                )}
-                <button type="button" onClick={cancelEdit} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                  <X size={16} />
-                </button>
-              </div>
+              <h2 className="text-lg font-bold text-slate-700 dark:text-slate-200">
+                {editingId ? '기록 수정' : '새 운동 추가'}
+              </h2>
             </div>
+            <div className="flex items-center gap-2">
+              {isPotentialPR && !editingId && (
+                <span className="flex items-center gap-1 text-[10px] font-black text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-full animate-bounce">
+                  <Sparkles size={10} /> NEW PR!
+                </span>
+              )}
+              <button type="button" onClick={cancelEdit} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-6">
 
             {error && (
               <div className="bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 p-3 rounded-xl text-xs font-bold flex items-center gap-2 border border-rose-100 dark:border-rose-900/30">
@@ -431,20 +424,20 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
               </div>
             </div>
 
-            <div className="flex mt-2">
-              <button type="submit" className="btn-primary w-full py-4 flex items-center justify-center gap-2">
+            <div className="flex mt-2 mb-8">
+              <button type="submit" className="btn-primary w-full py-4 flex items-center justify-center gap-2 text-lg">
                 {editingId ? '수정 완료' : '기록 저장하기'}
               </button>
             </div>
           </form>
-        </section>
+        </div>
       )}
 
       {/* Floating Action Button (Optional based on scroll/preference, but header has one too) */}
-      {!isFormVisible && workouts.length > 0 && (
+      {!isFormVisible && (
         <button 
           onClick={toggleForm}
-          className="fixed bottom-24 right-6 w-14 h-14 rounded-full bg-primary-600 text-white flex items-center justify-center shadow-xl shadow-primary-600/30 hover:scale-105 transition-transform z-40"
+          className="fixed bottom-[110px] right-6 w-14 h-14 rounded-full bg-primary-600 text-white flex items-center justify-center shadow-xl shadow-primary-600/30 hover:scale-105 transition-transform z-40"
         >
           <Plus size={28} />
         </button>

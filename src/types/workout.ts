@@ -24,3 +24,13 @@ export interface Goal {
 }
 
 export type UserPreferences = Record<string, BodyPart>;
+
+export interface BodyComposition {
+  id: string;
+  date: string;
+  weight?: number;
+  skeletalMuscle?: number;
+  bodyFat?: number;
+  bodyFatPercentage?: number;
+  createdAt: string;
+}

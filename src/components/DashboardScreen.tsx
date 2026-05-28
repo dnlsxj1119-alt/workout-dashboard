@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Workout } from '../types/workout';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, 
@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, Flame, Trophy, BarChart3, PieChart as PieIcon, Download, Flag, CheckCircle2,
-  CalendarDays, Zap, Clock
+  CalendarDays, Zap, Clock, X, Settings2
 } from 'lucide-react';
 import { 
   getMonthlyStats, 
@@ -19,12 +19,13 @@ import {
 } from '../utils/stats';
 import { generateInsights, Insight } from '../utils/insights';
 import { Lightbulb, ChevronRight } from 'lucide-react';
-import { Goal } from '../types/workout';
+import { Goal, BodyComposition } from '../types/workout';
 
 interface DashboardScreenProps {
   workouts: Workout[];
   goals: Goal[];
   onUpdateGoals: (goals: Goal[]) => void;
+  bodyComps: BodyComposition[];
 }
 
 const InsightCard: React.FC<{ insight: Insight }> = ({ insight }) => {
@@ -99,7 +100,7 @@ const Heatmap: React.FC<{ data: { date: string; count: number; level: number }[]
   );
 };
 
-const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) => {
+const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals, onUpdateGoals, bodyComps }) => {
   // Memoized data calculations
   const monthly = useMemo(() => getMonthlyStats(workouts), [workouts]);
   const bodyPartStats = useMemo(() => getBodyPartStats(workouts), [workouts]);
@@ -109,9 +110,26 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) =>
   const heatmapData = useMemo(() => getHeatmapData(workouts, 91), [workouts]);
   const weekendRatio = useMemo(() => getWeekendRatio(workouts), [workouts]);
   
-  const insights = useMemo(() => generateInsights(workouts), [workouts]);
+  const insights = useMemo(() => generateInsights(workouts, bodyComps), [workouts, bodyComps]);
 
   const COLORS = ['#0ea5e9', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b', '#06b6d4'];
+
+  const currentGoal = goals[0] || { type: 'frequency', target: 20 };
+  const [isGoalModalVisible, setIsGoalModalVisible] = useState(false);
+  const [targetDays, setTargetDays] = useState<number>(currentGoal.target);
+  
+  const recommendedTarget = useMemo(() => {
+    // Basic recommendation heuristic
+    const base = workouts.length > 0 ? Math.round(workouts.length / 3) : 12;
+    return Math.min(30, Math.max(8, base + 2));
+  }, [workouts]);
+
+  const handleUpdateGoal = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updatedGoals = [{ ...currentGoal, target: targetDays, period: 'month' as const }];
+    onUpdateGoals(updatedGoals);
+    setIsGoalModalVisible(false);
+  };
 
   const exportToCSV = () => {
     const headers = ['id', 'date', 'exercise', 'bodyPart', 'weight', 'reps', 'sets', 'memo'];
@@ -155,7 +173,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) =>
   }
 
   // Goal calculation (Frequency based)
-  const currentGoal = goals[0] || { type: 'frequency', target: 20 };
   const targetAchieved = monthly.count >= currentGoal.target;
   const progressPercent = Math.min(100, Math.round((monthly.count / currentGoal.target) * 100));
 
@@ -184,9 +201,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) =>
                 <Flag size={20} className="text-primary-200" />
                 <h3 className="text-lg font-bold tracking-tight">이번 달 운동 목표</h3>
               </div>
-              <span className="text-sm font-black text-white/80 bg-white/20 px-3 py-1 rounded-full">
-                달성률 {progressPercent}%
-              </span>
+              <button 
+                onClick={() => setIsGoalModalVisible(true)}
+                className="text-sm font-black text-white/80 bg-white/20 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-white/30 transition-colors"
+              >
+                <Settings2 size={12} /> 달성률 {progressPercent}%
+              </button>
             </div>
             
             <div className="flex items-baseline gap-2 mb-4">
@@ -406,6 +426,58 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals }) =>
             <p className="text-sm font-medium">기록이 더 쌓이면<br/>상세한 차트 분석이 제공됩니다!</p>
           </div>
         </section>
+      )}
+
+      {/* Goal Setting Modal */}
+      {isGoalModalVisible && (
+        <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 w-full max-w-sm shadow-xl animate-slide-up border border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">월간 목표 수정</h3>
+              <button 
+                onClick={() => setIsGoalModalVisible(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateGoal} className="flex flex-col gap-6">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">목표 운동 횟수 (월)</label>
+                <input
+                  type="number"
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 outline-none transition-all dark:text-slate-100 font-bold text-xl text-center"
+                  value={targetDays}
+                  onChange={(e) => setTargetDays(Number(e.target.value))}
+                  min="1"
+                  max="31"
+                />
+              </div>
+
+              <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-2xl flex items-start gap-3">
+                <Lightbulb size={18} className="text-primary-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-1">이런 목표는 어때요?</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    최근 운동 빈도를 고려해 <strong>월 {recommendedTarget}회</strong>를 추천드려요!
+                  </p>
+                  <button 
+                    type="button" 
+                    onClick={() => setTargetDays(recommendedTarget)}
+                    className="mt-2 text-xs font-bold text-primary-600 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg shadow-sm border border-primary-100 dark:border-primary-900/50"
+                  >
+                    추천 목표로 설정
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" className="btn-primary w-full py-4 text-lg">
+                목표 변경하기
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

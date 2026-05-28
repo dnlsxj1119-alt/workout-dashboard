@@ -4,7 +4,7 @@ import {
   parseISO, 
   format
 } from 'date-fns';
-import { Workout } from '../types/workout';
+import { Workout, BodyComposition } from '../types/workout';
 import { getPRRecords, getWorkoutStreak, getWeekendRatio } from './stats';
 
 export interface Insight {
@@ -19,13 +19,13 @@ export interface Insight {
 /**
  * Generate habit-focused insights from workout data
  */
-export const generateInsights = (workouts: Workout[]): Insight[] => {
-  if (workouts.length === 0) return [{
+export const generateInsights = (workouts: Workout[], bodyComps: BodyComposition[] = []): Insight[] => {
+  if (workouts.length === 0 && bodyComps.length === 0) return [{
     id: 'welcome',
     title: '새로운 시작',
     value: '오늘이 1일차!',
-    description: '첫 운동을 기록해주세요. 작은 시작이 큰 변화를 만듭니다.',
-    action: '지금 바로 첫 기록 남기기',
+    description: '첫 운동이나 체성분을 기록해주세요. 작은 시작이 큰 변화를 만듭니다.',
+    action: '지금 바로 기록 남기기',
     type: 'info'
   }];
 
@@ -50,6 +50,10 @@ export const generateInsights = (workouts: Workout[]): Insight[] => {
   // 5. Body Part Preference
   const preferenceInsight = analyzePreference(workouts);
   if (preferenceInsight) insights.push(preferenceInsight);
+
+  // 6. Body Composition Insight
+  const bodyCompInsight = analyzeBodyComp(bodyComps);
+  if (bodyCompInsight) insights.push(bodyCompInsight);
 
   return insights;
 };
@@ -157,5 +161,44 @@ const analyzePreference = (workouts: Workout[]): Insight | null => {
     };
   }
   
+  return null;
+};
+
+const analyzeBodyComp = (bodyComps: BodyComposition[]): Insight | null => {
+  if (bodyComps.length < 2) return null;
+
+  // Sort chronologically
+  const sorted = [...bodyComps].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const oldest = sorted[0];
+  const newest = sorted[sorted.length - 1];
+
+  if (newest.bodyFatPercentage !== undefined && oldest.bodyFatPercentage !== undefined) {
+    const diff = newest.bodyFatPercentage - oldest.bodyFatPercentage;
+    if (diff <= -1.0) {
+      return {
+        id: 'body-fat-drop',
+        title: '체지방 감소',
+        value: `${Math.abs(diff).toFixed(1)}% 감량`,
+        description: `첫 기록 대비 체지방률이 눈에 띄게 줄었어요. 운동과 식단의 시너지가 나타나고 있습니다!`,
+        action: '이대로 꾸준히 밀고 나가기',
+        type: 'positive'
+      };
+    }
+  }
+
+  if (newest.skeletalMuscle !== undefined && oldest.skeletalMuscle !== undefined) {
+    const diff = newest.skeletalMuscle - oldest.skeletalMuscle;
+    if (diff >= 0.5) {
+      return {
+        id: 'muscle-up',
+        title: '근력 증가',
+        value: `${diff.toFixed(1)}kg 증가`,
+        description: `골격근량이 확실히 늘었습니다. 그동안 들었던 무거운 쇳덩이들이 증명해주고 있어요 💪`,
+        action: '다음 목표 중량 도전하기',
+        type: 'positive'
+      };
+    }
+  }
+
   return null;
 };

@@ -47,6 +47,9 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     { setNumber: 2, weight: 0, reps: 0 },
     { setNumber: 3, weight: 0, reps: 0 }
   ]);
+  const [quickWeight, setQuickWeight] = useState<number>(0);
+  const [quickReps, setQuickReps] = useState<number>(0);
+  const [quickSets, setQuickSets] = useState<number>(3);
   const [memo, setMemo] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -102,6 +105,15 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     setSetRecords(newSets);
   };
   
+  const handleQuickGenerate = () => {
+    const newSets = Array.from({ length: Math.max(1, quickSets) }).map((_, i) => ({
+      setNumber: i + 1,
+      weight: quickWeight,
+      reps: quickReps
+    }));
+    setSetRecords(newSets);
+  };
+
   const formRef = useRef<HTMLDivElement>(null);
 
   // Filter exercises: default + user custom exercises for this category
@@ -192,6 +204,9 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
       { setNumber: 2, weight: 0, reps: 0 },
       { setNumber: 3, weight: 0, reps: 0 }
     ]);
+    setQuickWeight(0);
+    setQuickReps(0);
+    setQuickSets(3);
     setMemo('');
     
     showToast('기록이 저장되었습니다', 'success');
@@ -241,6 +256,9 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
       { setNumber: 3, weight: 0, reps: 0 }
     ];
     setSetRecords(initialEmptyRecords);
+    setQuickWeight(0);
+    setQuickReps(0);
+    setQuickSets(3);
     setMemo('');
     setIsFormVisible(false);
   };
@@ -259,6 +277,9 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
         { setNumber: 3, weight: 0, reps: 0 }
       ];
       setSetRecords(initialEmptyRecords);
+      setQuickWeight(0);
+      setQuickReps(0);
+      setQuickSets(3);
       setMemo('');
       setIsFormVisible(true);
     }
@@ -490,6 +511,53 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
                   />
                 </div>
               )}
+
+              {/* Quick Generate Section */}
+              <div className="bg-primary-50/50 dark:bg-primary-900/10 p-4 rounded-2xl border border-primary-100 dark:border-primary-900/30">
+                <label className="text-[10px] font-black text-primary-600 dark:text-primary-400 uppercase mb-3 block tracking-widest flex items-center gap-1">
+                  <Sparkles size={12} /> 세트 빠른 생성기
+                </label>
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <input 
+                      type="number" 
+                      placeholder="무게"
+                      className="w-full h-[40px] bg-white dark:bg-slate-900 rounded-xl px-2 text-center text-xs font-bold border border-slate-200 dark:border-slate-700 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                      value={quickWeight || ''}
+                      onChange={e => setQuickWeight(Number(e.target.value))}
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 pointer-events-none">KG</span>
+                  </div>
+                  <div className="flex-1 relative">
+                    <input 
+                      type="number" 
+                      placeholder="횟수"
+                      className="w-full h-[40px] bg-white dark:bg-slate-900 rounded-xl px-2 text-center text-xs font-bold border border-slate-200 dark:border-slate-700 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                      value={quickReps || ''}
+                      onChange={e => setQuickReps(Number(e.target.value))}
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 pointer-events-none">회</span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 h-[40px]">
+                      <button type="button" onClick={() => setQuickSets(Math.max(1, quickSets - 1))} className="w-8 h-full flex items-center justify-center text-slate-400 hover:text-primary-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-l-xl transition-colors">
+                        <Minus size={14} />
+                      </button>
+                      <span className="flex-1 text-center text-xs font-bold text-slate-700 dark:text-slate-200">{quickSets}세트</span>
+                      <button type="button" onClick={() => setQuickSets(quickSets + 1)} className="w-8 h-full flex items-center justify-center text-slate-400 hover:text-primary-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-r-xl transition-colors">
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={handleQuickGenerate}
+                  className="w-full mt-3 h-[40px] bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-900/50 rounded-xl text-xs font-bold hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
+                >
+                  설정값으로 한 번에 생성하기
+                </button>
+              </div>
 
               {/* Sets Input rows */}
               <div>

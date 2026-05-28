@@ -4,18 +4,19 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, 
   PieChart, Pie, AreaChart, Area 
 } from 'recharts';
+import { isSameMonth, isSameWeek, parseISO, format } from 'date-fns';
 import { 
   TrendingUp, Flame, Trophy, BarChart3, PieChart as PieIcon, Download, Flag, CheckCircle2,
   CalendarDays, Zap, Clock, X, Settings2
 } from 'lucide-react';
 import { 
-  getMonthlyStats, 
   getBodyPartStats, 
   getPRRecords, 
   getWorkoutStreak,
   getWeeklyVolumeTrend,
   getHeatmapData,
-  getWeekendRatio
+  getWeekendRatio,
+  calculateVolume
 } from '../utils/stats';
 import { generateInsights, Insight } from '../utils/insights';
 import { Lightbulb, ChevronRight } from 'lucide-react';
@@ -58,7 +59,7 @@ const InsightCard: React.FC<{ insight: Insight }> = ({ insight }) => {
   );
 };
 
-const Heatmap: React.FC<{ data: { date: string; count: number; level: number }[] }> = ({ data }) => {
+const Heatmap: React.FC<{ data: { date: string; count: number; level: number }[], title: string }> = ({ data, title }) => {
   // Chunk into columns of 7 (weeks)
   const columns = [];
   for (let i = 0; i < data.length; i += 7) {
@@ -80,7 +81,7 @@ const Heatmap: React.FC<{ data: { date: string; count: number; level: number }[]
     <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 text-sm uppercase tracking-wider">
-          <CalendarDays size={16} className="text-emerald-500" /> 최근 90일 기록
+          <CalendarDays size={16} className="text-emerald-500" /> {title}
         </h3>
       </div>
       <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
@@ -101,16 +102,36 @@ const Heatmap: React.FC<{ data: { date: string; count: number; level: number }[]
 };
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals, onUpdateGoals, bodyComps }) => {
+  const [periodFilter, setPeriodFilter] = useState<'week' | 'month' | 'all'>('month');
+
+  const filteredWorkouts = useMemo(() => {
+    const today = new Date();
+    return workouts.filter(w => {
+      if (periodFilter === 'all') return true;
+      if (periodFilter === 'month') return isSameMonth(parseISO(w.date), today);
+      if (periodFilter === 'week') return isSameWeek(parseISO(w.date), today, { weekStartsOn: 1 });
+      return true;
+    });
+  }, [workouts, periodFilter]);
+
   // Memoized data calculations
-  const monthly = useMemo(() => getMonthlyStats(workouts), [workouts]);
-  const bodyPartStats = useMemo(() => getBodyPartStats(workouts), [workouts]);
-  const prs = useMemo(() => getPRRecords(workouts).slice(0, 3), [workouts]);
-  const { streak, daysSinceLast } = useMemo(() => getWorkoutStreak(workouts), [workouts]);
-  const weeklyTrend = useMemo(() => getWeeklyVolumeTrend(workouts), [workouts]);
-  const heatmapData = useMemo(() => getHeatmapData(workouts, 91), [workouts]);
-  const weekendRatio = useMemo(() => getWeekendRatio(workouts), [workouts]);
+  const periodStats = useMemo(() => {
+    const count = new Set(filteredWorkouts.map(w => format(parseISO(w.date), 'yyyy-MM-dd'))).size;
+    const totalVolume = filteredWorkouts.reduce((sum, w) => sum + calculateVolume(w), 0);
+    return { count, totalVolume };
+  }, [filteredWorkouts]);
+
+  const bodyPartStats = useMemo(() => getBodyPartStats(filteredWorkouts), [filteredWorkouts]);
+  const prs = useMemo(() => getPRRecords(filteredWorkouts).slice(0, 3), [filteredWorkouts]);
+  const { streak, daysSinceLast } = useMemo(() => getWorkoutStreak(workouts), [workouts]); // Streak is always all-time
+  const weeklyTrend = useMemo(() => getWeeklyVolumeTrend(filteredWorkouts), [filteredWorkouts]);
   
-  const insights = useMemo(() => generateInsights(workouts, bodyComps), [workouts, bodyComps]);
+  const heatmapDays = periodFilter === 'week' ? 7 : periodFilter === 'month' ? 31 : 90;
+  const heatmapData = useMemo(() => getHeatmapData(workouts, heatmapDays), [workouts, heatmapDays]);
+  
+  const weekendRatio = useMemo(() => getWeekendRatio(filteredWorkouts), [filteredWorkouts]);
+  
+  const insights = useMemo(() => generateInsights(filteredWorkouts, bodyComps), [filteredWorkouts, bodyComps]);
 
   const COLORS = ['#0ea5e9', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b', '#06b6d4'];
 
@@ -173,22 +194,51 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals, onUp
   }
 
   // Goal calculation (Frequency based)
-  const targetAchieved = monthly.count >= currentGoal.target;
-  const progressPercent = Math.min(100, Math.round((monthly.count / currentGoal.target) * 100));
+  const targetLabel = periodFilter === 'week' ? '이번 주' : periodFilter === 'month' ? '이번 달' : '전체';
+  const periodTarget = periodFilter === 'week' ? Math.max(1, Math.round(currentGoal.target / 4)) 
+                     : periodFilter === 'all' ? currentGoal.target * 12 
+                     : currentGoal.target;
+  
+  const targetAchieved = periodStats.count >= periodTarget;
+  const progressPercent = Math.min(100, Math.round((periodStats.count / periodTarget) * 100));
 
   return (
     <div className="flex flex-col gap-6 pb-32 animate-fade-in bg-slate-50 dark:bg-slate-950 transition-colors">
-      <header className="px-6 py-2 flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">나의 운동 습관</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">꾸준함이 만드는 변화</p>
+      <header className="px-6 py-2 flex flex-col gap-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">나의 운동 습관</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">꾸준함이 만드는 변화</p>
+          </div>
+          <button 
+            onClick={exportToCSV}
+            className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50"
+          >
+            <Download size={18} />
+          </button>
         </div>
-        <button 
-          onClick={exportToCSV}
-          className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50"
-        >
-          <Download size={18} />
-        </button>
+        
+        {/* Period Filter */}
+        <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-2xl">
+          <button 
+            onClick={() => setPeriodFilter('week')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${periodFilter === 'week' ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            이번 주
+          </button>
+          <button 
+            onClick={() => setPeriodFilter('month')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${periodFilter === 'month' ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            이번 달
+          </button>
+          <button 
+            onClick={() => setPeriodFilter('all')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${periodFilter === 'all' ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            전체
+          </button>
+        </div>
       </header>
 
       {/* Goal Tracking (Frequency) */}
@@ -199,7 +249,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals, onUp
             <div className="flex justify-between items-start mb-6">
               <div className="flex items-center gap-2">
                 <Flag size={20} className="text-primary-200" />
-                <h3 className="text-lg font-bold tracking-tight">이번 달 운동 목표</h3>
+                <h3 className="text-lg font-bold tracking-tight">{targetLabel} 운동 목표</h3>
               </div>
               <button 
                 onClick={() => setIsGoalModalVisible(true)}
@@ -210,8 +260,8 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals, onUp
             </div>
             
             <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-5xl font-black">{monthly.count}</span>
-              <span className="text-xl font-bold text-white/60">/ {currentGoal.target}일</span>
+              <span className="text-5xl font-black">{periodStats.count}</span>
+              <span className="text-xl font-bold text-white/60">/ {periodTarget}일</span>
             </div>
 
             <div className="h-4 w-full bg-black/20 rounded-full overflow-hidden mb-6">
@@ -223,8 +273,8 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals, onUp
 
             <div className="flex justify-between items-center pt-6 border-t border-white/20">
               <div>
-                <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">월간 총 볼륨</p>
-                <p className="text-lg font-bold">{monthly.totalVolume.toLocaleString()} <span className="text-xs">kg</span></p>
+                <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">{targetLabel} 총 볼륨</p>
+                <p className="text-lg font-bold">{periodStats.totalVolume.toLocaleString()} <span className="text-xs">kg</span></p>
               </div>
               {targetAchieved && (
                 <div className="flex items-center gap-1 text-xs font-black text-emerald-400 uppercase">
@@ -250,7 +300,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals, onUp
 
       {/* Heatmap Section */}
       <section className="px-6">
-        <Heatmap data={heatmapData} />
+        <Heatmap data={heatmapData} title={periodFilter === 'week' ? '이번 주 기록' : periodFilter === 'month' ? '이번 달 기록' : '전체 기간 기록'} />
       </section>
 
       {/* Pattern Analysis Cards */}
@@ -321,7 +371,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ workouts, goals, onUp
             <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-slate-100 dark:border-slate-800">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <TrendingUp size={18} className="text-primary-500" /> 주간 볼륨 추이
+                  <TrendingUp size={18} className="text-primary-500" /> {periodFilter === 'week' ? '이번 주' : periodFilter === 'month' ? '최근 7일' : '볼륨'} 추이
                 </h3>
               </div>
               <div className="h-48 w-full">

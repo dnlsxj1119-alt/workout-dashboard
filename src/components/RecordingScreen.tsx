@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Workout, BodyPart, UserPreferences } from '../types/workout';
-import { Trash2, Edit3, Dumbbell, Sparkles, AlertCircle, Plus, X, Calendar as CalendarIcon, Minus } from 'lucide-react';
+import { Trash2, Edit3, Dumbbell, Sparkles, AlertCircle, Plus, X, Calendar as CalendarIcon, Minus, CheckCircle2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { predictBodyPart } from '../utils/classification';
 import { getPRRecords } from '../utils/stats';
@@ -49,6 +49,33 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [isCustom, setIsCustom] = useState(false);
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const renderMemoWithLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.split(urlRegex).map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a 
+            key={index} 
+            href={part} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-primary-600 dark:text-primary-400 hover:underline break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
   
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -91,8 +118,16 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!exercise) return setError('운동을 선택하거나 입력해주세요.');
-    if (weight < 0 || reps < 0 || sets < 1) return setError('올바른 수치를 입력해주세요.');
+    if (!exercise) {
+      setError('운동을 선택하거나 입력해주세요.');
+      showToast('필수 정보를 확인해주세요 (운동 선택)', 'error');
+      return;
+    }
+    if (weight < 0 || reps < 0 || sets < 1) {
+      setError('올바른 수치를 입력해주세요.');
+      showToast('필수 정보를 확인해주세요 (수치 입력)', 'error');
+      return;
+    }
     
     setError('');
 
@@ -119,8 +154,14 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
     setWeight(0);
     setReps(0);
     setMemo('');
+    
+    showToast('기록이 저장되었습니다', 'success');
+    
     // Hide form if it was an edit, otherwise keep it open for multiple entries
     if (editingId) setIsFormVisible(false);
+    
+    // Scroll to top of list after saving
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleEdit = (w: Workout) => {
@@ -174,6 +215,18 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
           <p className="text-slate-500 dark:text-slate-400 text-sm">총 {workouts.length}개의 기록</p>
         </div>
       </header>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-3 rounded-full shadow-lg flex items-center gap-2 animate-slide-up ${
+          toast.type === 'success' 
+            ? 'bg-emerald-500 text-white' 
+            : 'bg-rose-500 text-white'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          <span className="text-sm font-bold whitespace-nowrap">{toast.message}</span>
+        </div>
+      )}
 
       {/* History List - First in the flow */}
       <section className="px-4 flex flex-col gap-4">
@@ -234,8 +287,8 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
                 </div>
                 
                 {w.memo && (
-                  <div className="mt-3 p-3 bg-amber-50/50 dark:bg-amber-900/20 rounded-xl text-sm text-slate-600 dark:text-slate-300 border border-amber-100/50 dark:border-amber-900/30">
-                    {w.memo}
+                  <div className="mt-3 p-3 bg-amber-50/50 dark:bg-amber-900/20 rounded-xl text-sm text-slate-600 dark:text-slate-300 border border-amber-100/50 dark:border-amber-900/30 whitespace-pre-wrap">
+                    {renderMemoWithLinks(w.memo)}
                   </div>
                 )}
                 
@@ -424,8 +477,11 @@ const RecordingScreen: React.FC<RecordingScreenProps> = ({
               </div>
             </div>
 
-            <div className="flex mt-2 mb-8">
-              <button type="submit" className="btn-primary w-full py-4 flex items-center justify-center gap-2 text-lg">
+            <div className="flex mt-4 mb-24">
+              <button 
+                type="submit" 
+                className="btn-primary w-full py-4 flex items-center justify-center gap-2 text-lg shadow-lg shadow-primary-500/20 active:scale-95 transition-transform"
+              >
                 {editingId ? '수정 완료' : '기록 저장하기'}
               </button>
             </div>
